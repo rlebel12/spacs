@@ -1,0 +1,11 @@
+venv/
+.idea/
+.vscode/
+*.code-workspace
+
+dist/
+
+*.pyc
+
+.env
+poetry.lock

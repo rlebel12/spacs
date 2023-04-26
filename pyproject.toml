@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "spacs"
+version = "0.0.1"
+description = "Simple Pydantic AIOHTTP Client Sessions"
+authors = ["rlebel12"]
+readme = "README.md"
+packages = [{include = "spacs"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+aiohttp = "^3.8.4"
+pydantic = "^1.10.7"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
