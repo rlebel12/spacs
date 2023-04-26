@@ -145,7 +145,7 @@ class SpacsClient:
                 path, params=params_transformed, data=body_transformed, headers=headers
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
-                self._logger.info(
+                self._logger.debug(
                     {
                         "msg": "Request completed",
                         **base_log_info,
