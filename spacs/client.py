@@ -2,11 +2,16 @@ import datetime
 import logging
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, Coroutine, ClassVar, Self
+from typing import Any, ClassVar, Self, Awaitable, Type
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
 from pydantic import BaseModel
+
+RequestContent = BaseModel | dict[str, Any] | None
+JsonResponseContent = dict[str, Any] | list[dict[str, Any]]
+ModelResponse = BaseModel | list[BaseModel]
+SpacsClientResponse = str | JsonResponseContent | ModelResponse
 
 _logger = logging.getLogger(__name__)
 
@@ -70,63 +75,75 @@ class SpacsClient:
         self,
         path: str,
         *,
-        params: BaseModel | dict[str, Any] | None = None,
-        body: BaseModel | dict[str, Any] | None = None,
+        params: RequestContent = None,
+        body: RequestContent = None,
         headers: dict[str, str] | None = None,
         content_type: ContentType = ContentType.JSON,
-    ) -> dict:
+        response_model: Type[BaseModel] | None = None,
+    ) -> SpacsClientResponse:
         return await self._request(
-            self.session.get, path, params, body, headers, content_type
+            self.session.get, path, params, body, headers, content_type, response_model
         )
 
     async def post(
         self,
         path: str,
-        params: BaseModel | dict[str, Any] | None = None,
-        body: BaseModel | dict[str, Any] | None = None,
+        *,
+        params: RequestContent = None,
+        body: RequestContent = None,
         headers: dict[str, str] | None = None,
         content_type: ContentType = ContentType.JSON,
-    ) -> dict | list:
+        response_model: Type[BaseModel] | None = None,
+    ) -> SpacsClientResponse:
         return await self._request(
-            self.session.post, path, params, body, headers, content_type
+            self.session.post, path, params, body, headers, content_type, response_model
         )
 
     async def put(
         self,
         path: str,
-        params: BaseModel | dict[str, Any] | None = None,
-        body: BaseModel | dict[str, Any] | None = None,
+        *,
+        params: RequestContent = None,
+        body: RequestContent = None,
         headers: dict[str, str] | None = None,
         content_type: ContentType = ContentType.JSON,
-    ) -> dict | list:
+        response_model: Type[BaseModel] | None = None,
+    ) -> SpacsClientResponse:
         return await self._request(
-            self.session.put, path, params, body, headers, content_type
+            self.session.put, path, params, body, headers, content_type, response_model
         )
 
     async def delete(
         self,
         path: str,
-        params: BaseModel | dict[str, Any] | None = None,
-        body: BaseModel | dict[str, Any] | None = None,
+        *,
+        params: RequestContent = None,
+        body: RequestContent = None,
         headers: dict[str, str] | None = None,
         content_type: ContentType = ContentType.JSON,
-    ) -> dict | list:
+        response_model: Type[BaseModel] | None = None,
+    ) -> SpacsClientResponse:
         return await self._request(
-            self.session.delete, path, params, body, headers, content_type
+            self.session.delete,
+            path,
+            params,
+            body,
+            headers,
+            content_type,
+            response_model,
         )
 
     async def _request(
         self,
-        session_method: Callable[..., Coroutine[Any, None, ClientResponse]],
+        action: Callable[..., Awaitable[ClientResponse]],
         path: str,
-        params: BaseModel | dict[str, Any] | None = None,
-        body: BaseModel | dict[str, Any] | None = None,
+        params: RequestContent = None,
+        body: RequestContent = None,
         headers: dict[str, str] | None = None,
         content_type: ContentType = ContentType.JSON,
-    ) -> dict | list:
+        response_model: Type[BaseModel] | None = None,
+    ) -> SpacsClientResponse:
         """Generic function for issuing requests"""
-        if params is None:
-            params = {}
         if headers is None:
             headers = {}
         headers["Content-Type"] = content_type.value
@@ -137,13 +154,13 @@ class SpacsClient:
 
         start_time = datetime.datetime.now(tz=datetime.timezone.utc)
         base_log_info = {
-            "method": session_method.__name__,
+            "method": action.__name__,
             "base_url": self.base_url,
             "path": path,
         }
 
         try:
-            async with session_method(
+            async with action(
                 path, params=params_transformed, json=body_transformed, headers=headers
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -156,7 +173,7 @@ class SpacsClient:
                     }
                 )
                 if response.ok:
-                    return await self._parse_response(response)
+                    return await self._handle_ok_response(response, response_model)
                 else:
                     raise SpacsRequestError(
                         status_code=response.status,
@@ -191,9 +208,7 @@ class SpacsClient:
             await session.close()
 
     @classmethod
-    def _transform_content(
-        cls, content: BaseModel | dict[str, Any] | None
-    ) -> dict[str, str] | None:
+    def _transform_content(cls, content: RequestContent) -> dict[str, str] | None:
         """Ensures input objects are in acceptable formats for requests"""
 
         if content is None:
@@ -213,13 +228,30 @@ class SpacsClient:
                 content[key] = str(value)
         return content
 
+    @classmethod
+    async def _handle_ok_response(
+        cls, response: ClientResponse, model: Type[BaseModel] | None
+    ) -> str | JsonResponseContent | ModelResponse:
+        content = await cls._parse_response(response)
+        if model is not None and not isinstance(response, str):
+            content = cls._response_content_to_model(content, model)
+        return content
+
     @staticmethod
-    async def _parse_response(response: ClientResponse):
+    async def _parse_response(response: ClientResponse) -> str | JsonResponseContent:
         match response.content_type:
             case ContentType.HTML:
                 return await response.text()
             case _:
                 return await response.json()
+
+    @staticmethod
+    def _response_content_to_model(
+        content: JsonResponseContent, model: Type[BaseModel]
+    ) -> ModelResponse:
+        if isinstance(content, list):
+            return [model(**item) for item in content]
+        return model(**content)
 
 
 class SpacsRequestError(Exception):
