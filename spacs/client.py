@@ -125,6 +125,8 @@ class SpacsClient:
         content_type: ContentType = ContentType.JSON,
     ) -> dict | list:
         """Generic function for issuing requests"""
+        if params is None:
+            params = {}
         if headers is None:
             headers = {}
         headers["Content-Type"] = content_type.value
@@ -142,7 +144,7 @@ class SpacsClient:
 
         try:
             async with session_method(
-                path, params=params_transformed, data=body_transformed, headers=headers
+                path, params=params_transformed, json=body_transformed, headers=headers
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self._logger.debug(
@@ -189,7 +191,9 @@ class SpacsClient:
             await session.close()
 
     @classmethod
-    def _transform_content(cls, content: BaseModel | dict[str, Any] | None) -> dict[str, str] | None:
+    def _transform_content(
+        cls, content: BaseModel | dict[str, Any] | None
+    ) -> dict[str, str] | None:
         """Ensures input objects are in acceptable formats for requests"""
 
         if content is None:
