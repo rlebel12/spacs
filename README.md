@@ -4,10 +4,24 @@ A package to assist in managing and using long-lived AIOHTTP client sessions wit
 
 ## Features
 
-* Handles request params and bodies as either Pydantic objects or native Python dictionaries, converting items to JSON-safe format.
-* Abstracts away internals of managing the request/response objects, instead either returning parsed response content on success, or raising a specialized error object.
-* Automatically manages persistent connections to be shared over extended lifespan across application, cleaning up all open connections on teardown.
-* Utilizes modern Python type hinting.
+- Handles request params and bodies as either Pydantic objects or native Python dictionaries, converting items to JSON-safe format.
+- Abstracts away internals of managing the request/response objects, instead either returning parsed response content on success, or raising a specialized error object.
+- Automatically manages persistent connections to be shared over extended lifespan across application, cleaning up all open connections on teardown.
+- Utilizes modern Python type hinting.
+
+## Installation
+
+Using poetry (preferred):
+
+```bash
+poetry add spacs
+```
+
+Using pip:
+
+```bash
+pip install spacs
+```
 
 ## Usage
 
