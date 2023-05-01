@@ -8,10 +8,11 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
 from pydantic import BaseModel
 
-RequestContent = BaseModel | dict[str, Any] | None
+ResponseModel = Type[BaseModel] | None
+RequestContent = dict[str, Any] | BaseModel | None
 JsonResponseContent = dict[str, Any] | list[dict[str, Any]]
 ModelResponse = BaseModel | list[BaseModel]
-SpacsClientResponse = str | JsonResponseContent | ModelResponse
+SpacsResponse = str | JsonResponseContent | ModelResponse
 
 _logger = logging.getLogger(__name__)
 
@@ -20,6 +21,15 @@ class ContentType(StrEnum):
     JSON = "application/json"
     FORM = "application/x-www-form-urlencoded"
     HTML = "text/html"
+
+
+class SpacsRequest(BaseModel):
+    path: str
+    params: RequestContent = None
+    body: RequestContent = None
+    headers: dict[str, str] = None
+    content_type: ContentType = ContentType.JSON
+    response_model: ResponseModel = None
 
 
 class SpacsClient:
@@ -71,97 +81,39 @@ class SpacsClient:
         await self._session.close()
         self._session = None
 
-    async def get(
-        self,
-        path: str,
-        *,
-        params: RequestContent = None,
-        body: RequestContent = None,
-        headers: dict[str, str] | None = None,
-        content_type: ContentType = ContentType.JSON,
-        response_model: Type[BaseModel] | None = None,
-    ) -> SpacsClientResponse:
-        return await self._request(
-            self.session.get, path, params, body, headers, content_type, response_model
-        )
+    async def get(self, request: SpacsRequest) -> SpacsResponse:
+        return await self._request(self.session.get, request)
 
-    async def post(
-        self,
-        path: str,
-        *,
-        params: RequestContent = None,
-        body: RequestContent = None,
-        headers: dict[str, str] | None = None,
-        content_type: ContentType = ContentType.JSON,
-        response_model: Type[BaseModel] | None = None,
-    ) -> SpacsClientResponse:
-        return await self._request(
-            self.session.post, path, params, body, headers, content_type, response_model
-        )
+    async def post(self, request: SpacsRequest) -> SpacsResponse:
+        return await self._request(self.session.post, request)
 
-    async def put(
-        self,
-        path: str,
-        *,
-        params: RequestContent = None,
-        body: RequestContent = None,
-        headers: dict[str, str] | None = None,
-        content_type: ContentType = ContentType.JSON,
-        response_model: Type[BaseModel] | None = None,
-    ) -> SpacsClientResponse:
-        return await self._request(
-            self.session.put, path, params, body, headers, content_type, response_model
-        )
+    async def put(self, request: SpacsRequest) -> SpacsResponse:
+        return await self._request(self.session.put, request)
 
-    async def delete(
-        self,
-        path: str,
-        *,
-        params: RequestContent = None,
-        body: RequestContent = None,
-        headers: dict[str, str] | None = None,
-        content_type: ContentType = ContentType.JSON,
-        response_model: Type[BaseModel] | None = None,
-    ) -> SpacsClientResponse:
-        return await self._request(
-            self.session.delete,
-            path,
-            params,
-            body,
-            headers,
-            content_type,
-            response_model,
-        )
+    async def delete(self, request: SpacsRequest) -> SpacsResponse:
+        return await self._request(self.session.delete, request)
 
     async def _request(
         self,
         action: Callable[..., Awaitable[ClientResponse]],
-        path: str,
-        params: RequestContent = None,
-        body: RequestContent = None,
-        headers: dict[str, str] | None = None,
-        content_type: ContentType = ContentType.JSON,
-        response_model: Type[BaseModel] | None = None,
-    ) -> SpacsClientResponse:
+        request: SpacsRequest,
+    ) -> SpacsResponse:
         """Generic function for issuing requests"""
-        if headers is None:
-            headers = {}
-        headers["Content-Type"] = content_type.value
-
-        params_transformed = self._transform_content(params)
-        body_transformed = self._transform_content(body)
-        path = self._build_path(path)
+        request = self._prepare_request(request)
 
         start_time = datetime.datetime.now(tz=datetime.timezone.utc)
         base_log_info = {
             "method": action.__name__,
             "base_url": self.base_url,
-            "path": path,
+            "path": request.path,
         }
 
         try:
             async with action(
-                path, params=params_transformed, json=body_transformed, headers=headers
+                request.path,
+                params=request.params,
+                json=request.body,
+                headers=request.headers,
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self._logger.debug(
@@ -173,7 +125,9 @@ class SpacsClient:
                     }
                 )
                 if response.ok:
-                    return await self._handle_ok_response(response, response_model)
+                    return await self._handle_ok_response(
+                        response, request.response_model
+                    )
                 else:
                     raise SpacsRequestError(
                         status_code=response.status,
@@ -194,6 +148,19 @@ class SpacsClient:
             )
             raise error
 
+    def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:
+        # Copy content to not modify inputs to `SpacsClient` actions
+        result = request.copy(deep=True)
+
+        if result.headers is None:
+            result.headers = {}
+
+        result.headers["Content-Type"] = result.content_type.value
+        result.path = self._build_path(result.path)
+        result.params = self._prepare_content(result.params)
+        result.body = self._prepare_content(result.body)
+        return result
+
     def _build_path(self, path: str) -> str:
         result = f"/{path.strip('/')}"
         if self.path_prefix:
@@ -208,7 +175,16 @@ class SpacsClient:
             await session.close()
 
     @classmethod
-    def _transform_content(cls, content: RequestContent) -> dict[str, str] | None:
+    async def _handle_ok_response(
+        cls, response: ClientResponse, model: Type[BaseModel] | None
+    ) -> str | JsonResponseContent | ModelResponse:
+        content = await cls._parse_response(response)
+        if model is not None and not isinstance(response, str):
+            content = cls._response_content_to_model(content, model)
+        return content
+
+    @staticmethod
+    def _prepare_content(content: RequestContent) -> RequestContent:
         """Ensures input objects are in acceptable formats for requests"""
 
         if content is None:
@@ -216,6 +192,8 @@ class SpacsClient:
 
         if isinstance(content, BaseModel):
             content = content.dict()
+
+        # At this point, `content` is a regular dictionary
         for key in content:
             value = content[key]
             if isinstance(value, datetime.datetime):
@@ -226,15 +204,6 @@ class SpacsClient:
                 content[key] = value.total_seconds()
             elif isinstance(value, bool):
                 content[key] = str(value)
-        return content
-
-    @classmethod
-    async def _handle_ok_response(
-        cls, response: ClientResponse, model: Type[BaseModel] | None
-    ) -> str | JsonResponseContent | ModelResponse:
-        content = await cls._parse_response(response)
-        if model is not None and not isinstance(response, str):
-            content = cls._response_content_to_model(content, model)
         return content
 
     @staticmethod

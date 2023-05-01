@@ -26,17 +26,18 @@ pip install spacs
 ## Usage
 
 ```python
-import spacs
+from spacs import SpacsClient, SpacsRequest, SpacsRequestError
 from pydantic import BaseModel
 
 ...
 
-example_client = spacs.SpacsClient(base_url="http://example.com")
+example_client = SpacsClient(base_url="http://example.com")
 
 # Basic request with error handling
 try:
-    apple_response = await example_client.get("fruit/apple", params={"cultivar": "honeycrisp"})
-except spacs.SpacsRequestError as error:
+    request = SpacsRequest(path="/fruit/apple", params={"cultivar": "honeycrisp"})
+    apples = await example_client.get(request)
+except SpacsRequestError as error:
     print({"code": error.status_code, "reason": error.reason})
 
 # Sending Pydantic objects via HTTP POST
@@ -45,12 +46,13 @@ class MyModel(BaseModel):
     age: int
 
 example_object = MyModel(name="James", age=25)
-person_response = await example_client.post("person", body=example_object)
+request = SpacsRequest(path="/person", body=example_object, response_model=MyModel)
+created_person = await example_client.post(request)
 
 # Manually closing a session
 await example_client.close()
 # Alternatively, to close all open sessions:
-await spacs.SpacsClient.close_all()
+await SpacsClient.close_all()
 ```
 
 ## Building

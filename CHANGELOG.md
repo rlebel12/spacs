@@ -8,4 +8,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [X.Y.Z] - YYYY-MM-DD
 ### Initial release
 
-- Added `SpacsClient`, `SpacsRequestError`, and `ContentType`
+- Added `SpacsClient`, `SpacsRequest`, `SpacsRequestError`, and `ContentType`
