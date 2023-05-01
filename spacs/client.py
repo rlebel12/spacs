@@ -136,14 +136,12 @@ class SpacsClient:
         except ClientConnectorError as error:
             self._logger.error("Failed to connect to server.")
             raise error
-        except SpacsRequestError as error:
-            raise error
         except Exception as error:
             self._logger.error(
                 {
                     "msg": "Request error",
                     **base_log_info,
-                    "error": str(error),
+                    "error": repr(error),
                 }
             )
             raise error
@@ -229,4 +227,4 @@ class SpacsRequestError(Exception):
         self.reason = reason
 
     def __repr__(self) -> str:
-        return super().__repr__()
+        return f"SpacsRequestError(status_code={self.status_code}, reason={self.reason}"
