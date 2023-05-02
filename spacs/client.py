@@ -1,8 +1,9 @@
 import datetime
+import json
 import logging
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, ClassVar, Self, Awaitable, Type
+from typing import Any, Awaitable, ClassVar, Self, Type
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
@@ -112,7 +113,7 @@ class SpacsClient:
             async with action(
                 request.path,
                 params=request.params,
-                json=request.body,
+                data=request.body,
                 headers=request.headers,
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -157,6 +158,13 @@ class SpacsClient:
         result.path = self._build_path(result.path)
         result.params = self._prepare_content(result.params)
         result.body = self._prepare_content(result.body)
+
+        # All request actions pass the `data` kwarg instead of `json` to
+        # simplify the API, so when we specify that `application/json` is the
+        # `content-type`, automatically stringify/encode the payload.
+        if result.body is not None and result.content_type == ContentType.JSON:
+            result.body = json.dumps(result.body).encode("utf-8")
+
         return result
 
     def _build_path(self, path: str) -> str:
