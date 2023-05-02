@@ -9,10 +9,10 @@ from aiohttp import ClientConnectorError, ClientResponse
 from pydantic import BaseModel
 
 ResponseModel = Type[BaseModel] | None
-RequestContent = dict[str, Any] | BaseModel | None
-JsonResponseContent = dict[str, Any] | list[dict[str, Any]]
-ModelResponse = BaseModel | list[BaseModel]
-SpacsResponse = str | JsonResponseContent | ModelResponse
+ModelContent = BaseModel | list[BaseModel]
+JsonContent = dict[str, Any] | list[dict[str, Any]]
+RequestContent = JsonContent | ModelContent | None
+SpacsResponse = str | JsonContent | ModelContent
 
 _logger = logging.getLogger(__name__)
 
@@ -175,18 +175,21 @@ class SpacsClient:
     @classmethod
     async def _handle_ok_response(
         cls, response: ClientResponse, model: Type[BaseModel] | None
-    ) -> str | JsonResponseContent | ModelResponse:
+    ) -> str | JsonContent | ModelContent:
         content = await cls._parse_response(response)
         if model is not None and not isinstance(response, str):
             content = cls._response_content_to_model(content, model)
         return content
 
-    @staticmethod
-    def _prepare_content(content: RequestContent) -> RequestContent:
+    @classmethod
+    def _prepare_content(cls, content: RequestContent) -> RequestContent:
         """Ensures input objects are in acceptable formats for requests"""
 
         if content is None:
             return
+
+        if isinstance(content, list):
+            return [cls._prepare_content(item) for item in content]
 
         if isinstance(content, BaseModel):
             content = content.dict()
@@ -205,7 +208,7 @@ class SpacsClient:
         return content
 
     @staticmethod
-    async def _parse_response(response: ClientResponse) -> str | JsonResponseContent:
+    async def _parse_response(response: ClientResponse) -> str | JsonContent:
         match response.content_type:
             case ContentType.HTML:
                 return await response.text()
@@ -214,8 +217,8 @@ class SpacsClient:
 
     @staticmethod
     def _response_content_to_model(
-        content: JsonResponseContent, model: Type[BaseModel]
-    ) -> ModelResponse:
+        content: JsonContent, model: Type[BaseModel]
+    ) -> ModelContent:
         if isinstance(content, list):
             return [model(**item) for item in content]
         return model(**content)
