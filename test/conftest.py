@@ -17,6 +17,10 @@ class ResponseConfig(BaseModel):
     content_type: ContentType = ContentType.JSON
 
 
+ResponseFactory = Callable[[ResponseConfig], ClientResponse]
+ClientFactory = Callable[[ResponseConfig], SpacsClient]
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def close_sessions():
     yield
@@ -24,7 +28,7 @@ async def close_sessions():
 
 
 @pytest.fixture
-def make_response() -> Callable[[ResponseConfig], ClientResponse]:
+def make_response() -> ResponseFactory:
     def _make_response(conf: ResponseConfig) -> ClientResponse:
         response = AsyncMock()
         response.ok = conf.status_code in range(200, 300)
@@ -38,8 +42,8 @@ def make_response() -> Callable[[ResponseConfig], ClientResponse]:
 
 @pytest.fixture
 def make_client(
-    make_response: Callable[[ResponseConfig], ClientResponse],
-) -> Callable[[ResponseConfig], SpacsClient]:
+    make_response: ResponseFactory,
+) -> ClientFactory:
     def _make_client(conf: ResponseConfig) -> SpacsClient:
         _client = SpacsClient(base_url=BASE_URL)
         response = make_response(conf)

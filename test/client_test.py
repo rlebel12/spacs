@@ -1,4 +1,4 @@
-from test.conftest import BASE_URL, ResponseConfig
+from test.conftest import BASE_URL, ClientFactory, ResponseConfig
 
 import pytest
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ async def test_close_all():
 
 
 @pytest.mark.asyncio
-async def test_get(make_client):
+async def test_get(make_client: ClientFactory):
     conf = ResponseConfig(status_code=200, body={"foo": "bar"})
     client = make_client(conf)
     request = SpacsRequest(path="/test")
@@ -43,7 +43,7 @@ async def test_get(make_client):
 
 
 @pytest.mark.asyncio
-async def test_post_model(make_client):
+async def test_post_model(make_client: ClientFactory):
     class TestModel(BaseModel):
         name: str
         age: int

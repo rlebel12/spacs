@@ -103,30 +103,28 @@ class SpacsClient:
         }
 
         try:
-            async with action(
+            response = await action(
                 request.path,
                 params=request.params,
                 data=request.body,
                 headers=request.headers,
-            ) as response:
-                end_time = datetime.datetime.now(tz=datetime.timezone.utc)
-                logger.debug(
-                    {
-                        "msg": "Request completed",
-                        **base_log_info,
-                        "status": response.status,
-                        "duration": str(end_time - start_time),
-                    }
+            )
+            end_time = datetime.datetime.now(tz=datetime.timezone.utc)
+            logger.debug(
+                {
+                    "msg": "Request completed",
+                    **base_log_info,
+                    "status": response.status,
+                    "duration": str(end_time - start_time),
+                }
+            )
+            if response.ok:
+                return await self._handle_ok_response(response, request.response_model)
+            else:
+                raise SpacsRequestError(
+                    status_code=response.status,
+                    reason=response.reason,
                 )
-                if response.ok:
-                    return await self._handle_ok_response(
-                        response, request.response_model
-                    )
-                else:
-                    raise SpacsRequestError(
-                        status_code=response.status,
-                        reason=response.reason,
-                    )
         except ClientConnectorError as error:
             logger.error("Failed to connect to server.")
             raise error
