@@ -27,8 +27,8 @@ async def close_sessions():
 def make_response() -> Callable[[ResponseConfig], ClientResponse]:
     def _make_response(conf: ResponseConfig) -> ClientResponse:
         response = AsyncMock()
-        response.ok = AsyncMock(return_value=(conf.status_code in range(200, 200)))
-        response.status_code = AsyncMock(return_value=conf.status_code)
+        response.ok = conf.status_code in range(200, 300)
+        response.status_code = conf.status_code
         response.json = AsyncMock(return_value=conf.body)
         response.content_type = conf.content_type.value
         return response
