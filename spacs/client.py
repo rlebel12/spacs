@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 from collections.abc import Callable
 from enum import StrEnum
 from typing import Any, Awaitable, ClassVar, Self, Type
@@ -9,13 +8,13 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
 from pydantic import BaseModel
 
+from spacs.conf import logger
+
 ResponseModel = Type[BaseModel] | None
 ModelContent = BaseModel | list[BaseModel]
 JsonContent = dict[str, Any] | list[dict[str, Any]]
 RequestContent = JsonContent | ModelContent | None
 SpacsResponse = str | JsonContent | ModelContent
-
-_logger = logging.getLogger(__name__)
 
 
 class ContentType(StrEnum):
@@ -38,7 +37,6 @@ class SpacsClient:
     path_prefix: str
 
     _sessions: ClassVar[list[Self]] = []
-    _logger: logging.Logger
     _session: aiohttp.ClientSession | None = None
 
     def __init__(
@@ -46,21 +44,16 @@ class SpacsClient:
         *,
         base_url: str | None = None,
         path_prefix: str = "",
-        logger: logging.Logger | None = None,
     ) -> None:
         """
 
         Keyword Args:
             base_url (str | None): Base url to be used for all requests
             path_prefix (str): Path partial to be prepended to paths for all requests
-            logger (logging.Logger | None): Override for logger
         """
         self._sessions.append(self)
         self.base_url = base_url
         self.path_prefix = path_prefix.strip("/")
-        self._logger = logger
-        if self._logger is None:
-            self._logger = logging.getLogger(__name__)
 
     def __del__(self) -> None:
         self._sessions.remove(self)
@@ -78,7 +71,7 @@ class SpacsClient:
 
     async def close(self) -> None:
         if not self.is_open:
-            return _logger.warning("No session to close")
+            return logger.warning("No session to close")
         await self._session.close()
         self._session = None
 
@@ -117,7 +110,7 @@ class SpacsClient:
                 headers=request.headers,
             ) as response:
                 end_time = datetime.datetime.now(tz=datetime.timezone.utc)
-                self._logger.debug(
+                logger.debug(
                     {
                         "msg": "Request completed",
                         **base_log_info,
@@ -135,10 +128,10 @@ class SpacsClient:
                         reason=response.reason,
                     )
         except ClientConnectorError as error:
-            self._logger.error("Failed to connect to server.")
+            logger.error("Failed to connect to server.")
             raise error
         except Exception as error:
-            self._logger.error(
+            logger.error(
                 {
                     "msg": "Request error",
                     **base_log_info,
@@ -168,9 +161,10 @@ class SpacsClient:
         return result
 
     def _build_path(self, path: str) -> str:
-        result = f"/{path.strip('/')}"
+        prepend_slash = "/" if self.base_url else ""
+        result = f"{prepend_slash}{path.strip('/')}"
         if self.path_prefix:
-            result = f"/{self.path_prefix}{result}"
+            result = f"{prepend_slash}{self.path_prefix}{result}"
         return result
 
     @classmethod
