@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -9,6 +9,15 @@ from pydantic import BaseModel
 from spacs.client import ContentType, SpacsClient
 
 BASE_URL = "http://127.0.0.1"
+
+
+class ExpectedRequest(BaseModel):
+    method: Literal["GET", "POST"]
+    path: str
+    allow_redirects: bool = True
+    params: dict[str, str] | None = None
+    data: bytes | None = None
+    headers: dict[str, str] = {"Content-Type": "application/json"}
 
 
 class ResponseConfig(BaseModel):

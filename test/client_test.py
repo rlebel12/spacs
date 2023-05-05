@@ -1,4 +1,4 @@
-from test.conftest import BASE_URL, ClientFactory, ResponseConfig
+from test.conftest import BASE_URL, ClientFactory, ExpectedRequest, ResponseConfig
 
 import pytest
 from pydantic import BaseModel
@@ -32,14 +32,7 @@ async def test_get(make_client: ClientFactory):
     result = await client.get(request)
 
     assert result == {"foo": "bar"}
-    client.session._request.assert_called_once_with(
-        "GET",
-        "/test",
-        allow_redirects=True,
-        params=None,
-        data=None,
-        headers={"Content-Type": "application/json"},
-    )
+    assert_request(client, ExpectedRequest(method="GET", path="/test"))
 
 
 @pytest.mark.asyncio
@@ -56,10 +49,29 @@ async def test_post_model(make_client: ClientFactory):
     result = await client.post(request)
 
     assert result == object
-    client.session._request.assert_called_once_with(
-        "POST",
-        "/test",
-        params=None,
-        data=b'{"name": "James", "age": 25}',
-        headers={"Content-Type": "application/json"},
+    assert_request(
+        client,
+        ExpectedRequest(
+            method="POST", path="/test", data=b'{"name": "James", "age": 25}'
+        ),
     )
+
+
+def assert_request(client: SpacsClient, request: ExpectedRequest) -> None:
+    if request.method in ["GET"]:
+        client.session._request.assert_called_once_with(
+            request.method,
+            request.path,
+            allow_redirects=request.allow_redirects,
+            params=request.params,
+            data=request.data,
+            headers=request.headers,
+        )
+    else:
+        client.session._request.assert_called_once_with(
+            request.method,
+            request.path,
+            params=request.params,
+            data=request.data,
+            headers=request.headers,
+        )
