@@ -1,3 +1,4 @@
+import datetime
 from typing import Any, Callable, Literal
 from unittest.mock import AsyncMock
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 from spacs.client import ContentType, SpacsClient
 
 BASE_URL = "http://127.0.0.1"
+FROZEN_TIME = datetime.datetime(2023, 5, 5, 8, 0, 0, 0)
 
 
 class ExpectedRequest(BaseModel):
