@@ -23,37 +23,104 @@ Using pip:
 pip install spacs
 ```
 
-## Usage
-
+## Basic Usage
+SPACS currently supports the HTTP methods GET, POST, PUT, and DELETE. All methods take the same, singular `SpacsRequest` argument. The following are some common patterns to be utilized when working with SPACS.
+### Request With Params
 ```python
-from spacs import SpacsClient, SpacsRequest, SpacsRequestError
+import asyncio
+from spacs import SpacsClient, SpacsRequest
+
+async def example():
+    client = SpacsClient(base_url="https://httpbin.org")
+    request = SpacsRequest(path="/get", params={"foo": "bar"})
+    result = await client.get(request)
+    print(result)
+    await client.close()
+
+
+loop = asyncio.new_event_loop()
+loop.run_until_complete(example())
+```
+
+### Sending Pydantic objects via request body
+```python
+import asyncio
+from spacs import SpacsClient, SpacsRequest
 from pydantic import BaseModel
 
-...
-
-example_client = SpacsClient(base_url="http://example.com")
-
-# Basic request with error handling
-try:
-    request = SpacsRequest(path="/fruit/apple", params={"cultivar": "honeycrisp"})
-    apples = await example_client.get(request)
-except SpacsRequestError as error:
-    print({"code": error.status_code, "reason": error.reason})
-
-# Sending Pydantic objects via HTTP POST
-class MyModel(BaseModel):
+class Person(BaseModel):
     name: str
     age: int
 
-example_object = MyModel(name="James", age=25)
-request = SpacsRequest(path="/person", body=example_object, response_model=MyModel)
-created_person = await example_client.post(request)
+async def example():
+    client = SpacsClient(base_url="https://httpbin.org")
+    person = Person(name="James", age=25)
+    request = SpacsRequest(path="/post", body=person)
+    response = await client.post(request)
+    print(response)
+    await client.close()
 
-# Manually closing a session
-await example_client.close()
-# Alternatively, to close all open sessions:
+
+loop = asyncio.new_event_loop()
+loop.run_until_complete(example())
+```
+
+#### Tip: Response Model
+For all examples here, if the API declares that response bodies will *only* contain json data representing a Pydantic object, the payload can be deserialized into an object by specifying a Pydantic class in the request. For example, using our above `Person` model:
+```python
+request = SpacsRequest(path="/post", body=person, response_model=Person)
+response = await client.post(request)
+assert isinstance(response, Person)
+```
+
+## Handling Errors
+### Manual Error Handling
+```python
+import asyncio
+from spacs import SpacsClient, SpacsRequest, SpacsRequestError
+
+async def example():
+    client = SpacsClient(base_url="https://httpbin.org")
+    request = SpacsRequest(path="/status/404")
+    try:
+        await client.get(request)
+    except SpacsRequestError as error:
+        print({"code": error.status, "reason": error.reason})
+    await client.close()
+
+
+loop = asyncio.new_event_loop()
+loop.run_until_complete(example())
+```
+
+### Injecting Error Handler
+```python
+import asyncio
+from spacs import SpacsClient, SpacsRequest, SpacsRequestError
+
+async def error_handler(error: SpacsRequestError) -> None:
+    print(f"It blew up: {error.reason}")
+
+async def example():
+    client = SpacsClient(base_url="https://httpbin.org", error_handler=error_handler)
+    request = SpacsRequest(path="/status/504")
+    response = await client.get(request)
+    await client.close()
+    assert response is None
+
+
+loop = asyncio.new_event_loop()
+loop.run_until_complete(example())
+```
+
+### Closing sessions
+In the above examples, a `client.close()` call is made. This is to ensure that the underlying AIOHTTP session
+is properly cleaned up, and is a step that should always be performed on application teardown. Alternatively, the following can be used to close all open sessions without having to
+directly reference a client instance:
+```python
 await SpacsClient.close_all()
 ```
+> SPACS is not affiliated with httpbin.org.
 
 ## Building
 
