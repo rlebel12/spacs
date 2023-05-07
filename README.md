@@ -38,8 +38,7 @@ async def example():
     await client.close()
 
 
-loop = asyncio.new_event_loop()
-loop.run_until_complete(example())
+asyncio.new_event_loop().run_until_complete(example())
 ```
 
 ### Sending Pydantic objects via request body
@@ -61,8 +60,7 @@ async def example():
     await client.close()
 
 
-loop = asyncio.new_event_loop()
-loop.run_until_complete(example())
+asyncio.new_event_loop().run_until_complete(example())
 ```
 
 #### Tip: Response Model
@@ -89,8 +87,7 @@ async def example():
     await client.close()
 
 
-loop = asyncio.new_event_loop()
-loop.run_until_complete(example())
+asyncio.new_event_loop().run_until_complete(example())
 ```
 
 ### Injecting Error Handler
@@ -109,8 +106,7 @@ async def example():
     assert response is None
 
 
-loop = asyncio.new_event_loop()
-loop.run_until_complete(example())
+asyncio.new_event_loop().run_until_complete(example())
 ```
 
 ### Closing sessions
