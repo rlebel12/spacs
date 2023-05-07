@@ -47,7 +47,7 @@ class SpacsRequestError(Exception):
 class SpacsClient:
     base_url: str | None
     path_prefix: str
-    error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None
+    error_handler: Callable[[SpacsRequestError, Self], Awaitable[None]] | None
 
     _sessions: ClassVar[list[Self]] = []
     _session: aiohttp.ClientSession | None = None
@@ -152,7 +152,7 @@ class SpacsClient:
                 }
             )
             if self.error_handler is not None and isinstance(error, SpacsRequestError):
-                return await self.error_handler(error)
+                return await self.error_handler(error, self)
             raise error
 
     def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:

@@ -37,7 +37,6 @@ async def example():
     print(result)
     await client.close()
 
-
 asyncio.new_event_loop().run_until_complete(example())
 ```
 
@@ -58,7 +57,6 @@ async def example():
     response = await client.post(request)
     print(response)
     await client.close()
-
 
 asyncio.new_event_loop().run_until_complete(example())
 ```
@@ -86,7 +84,6 @@ async def example():
         print({"code": error.status, "reason": error.reason})
     await client.close()
 
-
 asyncio.new_event_loop().run_until_complete(example())
 ```
 
@@ -95,16 +92,16 @@ asyncio.new_event_loop().run_until_complete(example())
 import asyncio
 from spacs import SpacsClient, SpacsRequest, SpacsRequestError
 
-async def error_handler(error: SpacsRequestError) -> None:
+async def error_handler(error: SpacsRequestError, client: SpacsClient) -> None:
     print(f"It blew up: {error.reason}")
+    await client.close()
 
 async def example():
     client = SpacsClient(base_url="https://httpbin.org", error_handler=error_handler)
     request = SpacsRequest(path="/status/504")
     response = await client.get(request)
-    await client.close()
+    assert not client.is_open
     assert response is None
-
 
 asyncio.new_event_loop().run_until_complete(example())
 ```

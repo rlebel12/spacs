@@ -97,8 +97,9 @@ async def test_post_model(make_client: ClientFactory):
 
 @pytest.mark.asyncio
 async def test_error_handler(make_client: ClientFactory) -> None:
-    async def handler(error: SpacsRequestError) -> None:
+    async def handler(error: SpacsRequestError, client: SpacsClient) -> None:
         assert error.status == 500
+        assert isinstance(client, SpacsClient)
 
     mock_handler = AsyncMock(side_effect=handler)
     client = make_client(ResponseConfig(status=500), mock_handler)

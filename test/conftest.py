@@ -59,7 +59,8 @@ def make_client(
 ) -> ClientFactory:
     def _make_client(
         conf: ResponseConfig,
-        error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None = None,
+        error_handler: Callable[[SpacsRequestError, SpacsClient], Awaitable[None]]
+        | None = None,
     ) -> SpacsClient:
         _client = SpacsClient(base_url=BASE_URL, error_handler=error_handler)
         response = make_response(conf)
