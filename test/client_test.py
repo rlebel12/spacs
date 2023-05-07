@@ -102,8 +102,9 @@ async def test_error_handler(make_client: ClientFactory) -> None:
 
     mock_handler = AsyncMock(side_effect=handler)
     client = make_client(ResponseConfig(status=500), mock_handler)
-    await client.get(SpacsRequest(path="/"))
+    result = await client.get(SpacsRequest(path="/"))
     mock_handler.assert_called_once()
+    assert result is None
 
 
 @pytest.mark.asyncio

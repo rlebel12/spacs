@@ -2,7 +2,7 @@ import datetime
 import json
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, Awaitable, ClassVar, NewType, Self, Type
+from typing import Any, Awaitable, ClassVar, Self, Type
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
@@ -10,12 +10,11 @@ from pydantic import BaseModel
 
 from spacs.conf import logger
 
-SuccessIndicator = NewType("SuccessIndicator", bool)
 ResponseModel = Type[BaseModel] | None
 ModelContent = BaseModel | list[BaseModel]
 JsonContent = dict[str, Any] | list[dict[str, Any]]
 RequestContent = JsonContent | ModelContent | None
-SpacsResponse = str | JsonContent | ModelContent | SuccessIndicator
+SpacsResponse = str | JsonContent | ModelContent | None
 
 
 class ContentType(StrEnum):
@@ -153,8 +152,7 @@ class SpacsClient:
                 }
             )
             if self.error_handler is not None and isinstance(error, SpacsRequestError):
-                await self.error_handler(error)
-                return SuccessIndicator(False)
+                return await self.error_handler(error)
             raise error
 
     def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:
