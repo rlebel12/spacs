@@ -111,7 +111,19 @@ async def test_no_error_handler(make_client: ClientFactory) -> None:
     client = make_client(ResponseConfig(status=500))
     with pytest.raises(SpacsRequestError) as excinfo:
         await client.get(SpacsRequest(path="/"))
-    assert excinfo.value.status == 500
+    error = excinfo.value
+    assert isinstance(error, SpacsRequestError)
+    assert error.status == 500
+
+
+@pytest.mark.asyncio
+async def test_connection_error(make_client: ClientFactory) -> None:
+    ...
+
+
+@pytest.mark.asyncio
+async def test_other_error(make_client: ClientFactory) -> None:
+    ...
 
 
 def assert_request(client: SpacsClient, request: ExpectedRequest) -> None:
