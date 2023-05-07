@@ -6,12 +6,13 @@ from test.conftest import (
     ExpectedRequest,
     ResponseConfig,
 )
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
 from yarl import URL
 
-from spacs.client import SpacsClient, SpacsRequest
+from spacs.client import SpacsClient, SpacsRequest, SpacsRequestError
 
 
 @pytest.mark.asyncio
@@ -43,7 +44,7 @@ async def test_close_all(make_client: ClientFactory):
 
 @pytest.mark.asyncio
 async def test_get(make_client: ClientFactory):
-    client = make_client(ResponseConfig(status_code=200, body={"foo": "bar"}))
+    client = make_client(ResponseConfig(status=200, body={"foo": "bar"}))
 
     result = await client.get(SpacsRequest(path="/test"))
 
@@ -62,7 +63,7 @@ async def test_post_model(make_client: ClientFactory):
 
     client = make_client(
         ResponseConfig(
-            status_code=201,
+            status=201,
             body={
                 "name": "James",
                 "age": 25,
@@ -92,6 +93,25 @@ async def test_post_model(make_client: ClientFactory):
             data=b'{"name": "James", "age": 25, "datetime": "2023-05-05T08:00:00", "timedelta": 3600.0, "optional": null}',  # noqa: E501
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_error_handler(make_client: ClientFactory) -> None:
+    async def handler(error: SpacsRequestError) -> None:
+        assert error.status == 500
+
+    mock_handler = AsyncMock(side_effect=handler)
+    client = make_client(ResponseConfig(status=500), mock_handler)
+    await client.get(SpacsRequest(path="/"))
+    mock_handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_no_error_handler(make_client: ClientFactory) -> None:
+    client = make_client(ResponseConfig(status=500))
+    with pytest.raises(SpacsRequestError) as excinfo:
+        await client.get(SpacsRequest(path="/"))
+    assert excinfo.value.status == 500
 
 
 def assert_request(client: SpacsClient, request: ExpectedRequest) -> None:

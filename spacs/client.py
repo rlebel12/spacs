@@ -32,9 +32,22 @@ class SpacsRequest(BaseModel):
     response_model: ResponseModel = None
 
 
+class SpacsRequestError(Exception):
+    status: int
+    reason: str
+
+    def __init__(self, status: int, reason: str):
+        self.status = status
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"SpacsRequestError(status={self.status}, reason={self.reason}"
+
+
 class SpacsClient:
     base_url: str | None
     path_prefix: str
+    error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None
 
     _sessions: ClassVar[list[Self]] = []
     _session: aiohttp.ClientSession | None = None
@@ -44,6 +57,7 @@ class SpacsClient:
         *,
         base_url: str | None = None,
         path_prefix: str = "",
+        error_handler: Callable[[SpacsRequestError], None] | None = None,
     ) -> None:
         """
 
@@ -54,6 +68,7 @@ class SpacsClient:
         self._sessions.append(self)
         self.base_url = base_url
         self.path_prefix = path_prefix.strip("/")
+        self.error_handler = error_handler
 
     def __del__(self) -> None:
         self._sessions.remove(self)
@@ -122,7 +137,7 @@ class SpacsClient:
                 return await self._handle_ok_response(response, request.response_model)
             else:
                 raise SpacsRequestError(
-                    status_code=response.status,
+                    status=response.status,
                     reason=response.reason,
                 )
         except ClientConnectorError as error:
@@ -136,6 +151,8 @@ class SpacsClient:
                     "error": repr(error),
                 }
             )
+            if self.error_handler:
+                return await self.error_handler(error)
             raise error
 
     def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:
@@ -222,12 +239,3 @@ class SpacsClient:
         if isinstance(content, list):
             return [model(**item) for item in content]
         return model(**content)
-
-
-class SpacsRequestError(Exception):
-    def __init__(self, status_code: int, reason: str):
-        self.status_code = status_code
-        self.reason = reason
-
-    def __repr__(self) -> str:
-        return f"SpacsRequestError(status_code={self.status_code}, reason={self.reason}"
