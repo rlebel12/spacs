@@ -35,10 +35,16 @@ class SpacsRequest(BaseModel):
 class SpacsRequestError(Exception):
     status: int
     reason: str
+    client: "SpacsClient"
+    request: SpacsRequest
 
-    def __init__(self, status: int, reason: str):
+    def __init__(
+        self, status: int, reason: str, client: "SpacsClient", request: SpacsRequest
+    ):
         self.status = status
         self.reason = reason
+        self.client = client
+        self.request = request
 
     def __repr__(self) -> str:
         return f"SpacsRequestError(status={self.status}, reason={self.reason}"
@@ -47,7 +53,8 @@ class SpacsRequestError(Exception):
 class SpacsClient:
     base_url: str | None
     path_prefix: str
-    error_handler: Callable[[SpacsRequestError, Self], Awaitable[None]] | None
+    error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None
+    close_on_error: bool | list[int]
 
     _sessions: ClassVar[list[Self]] = []
     _session: aiohttp.ClientSession | None = None
@@ -58,6 +65,7 @@ class SpacsClient:
         base_url: str | None = None,
         path_prefix: str = "",
         error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None = None,
+        close_on_error: bool | list[int] = False,
     ) -> None:
         """
 
@@ -69,6 +77,7 @@ class SpacsClient:
         self.base_url = base_url
         self.path_prefix = path_prefix.strip("/")
         self.error_handler = error_handler
+        self.close_on_error = close_on_error
 
     def __del__(self) -> None:
         self._sessions.remove(self)
@@ -110,7 +119,6 @@ class SpacsClient:
         """Generic function for issuing requests"""
         request = self._prepare_request(request)
 
-        start_time = datetime.datetime.now(tz=datetime.timezone.utc)
         base_log_info = {
             "method": action.__name__,
             "base_url": self.base_url,
@@ -118,42 +126,12 @@ class SpacsClient:
         }
 
         try:
-            response = await action(
-                request.path,
-                params=request.params,
-                data=request.body,
-                headers=request.headers,
-            )
-            end_time = datetime.datetime.now(tz=datetime.timezone.utc)
-            logger.debug(
-                {
-                    "msg": "Request completed",
-                    **base_log_info,
-                    "status": response.status,
-                    "duration": str(end_time - start_time),
-                }
-            )
-            if response.ok:
-                return await self._handle_ok_response(response, request.response_model)
-            else:
-                raise SpacsRequestError(
-                    status=response.status,
-                    reason=response.reason,
-                )
+            return await self._make_request(request, action, base_log_info)
         except ClientConnectorError as error:
             logger.error("Failed to connect to server.")
             raise error
         except Exception as error:
-            logger.error(
-                {
-                    "msg": "Request error",
-                    **base_log_info,
-                    "error": repr(error),
-                }
-            )
-            if self.error_handler is not None and isinstance(error, SpacsRequestError):
-                return await self.error_handler(error, self)
-            raise error
+            return await self._handle_request_failure(error, base_log_info)
 
     def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:
         # Copy content to not modify inputs to `SpacsClient` actions
@@ -181,6 +159,61 @@ class SpacsClient:
         if self.path_prefix:
             result = f"{prepend_slash}{self.path_prefix}{result}"
         return result
+
+    async def _make_request(
+        self,
+        request: SpacsRequest,
+        action: Callable[..., Awaitable[ClientResponse]],
+        base_log_info: dict,
+    ) -> str | JsonContent | ModelContent:
+        start_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        response = await action(
+            request.path,
+            params=request.params,
+            data=request.body,
+            headers=request.headers,
+        )
+        duration = datetime.datetime.now(tz=datetime.timezone.utc) - start_time
+        logger.debug(
+            {
+                "msg": "Request completed",
+                **base_log_info,
+                "status": response.status,
+                "duration": str(duration),
+            }
+        )
+        if response.ok:
+            return await self._handle_ok_response(response, request.response_model)
+        raise SpacsRequestError(
+            status=response.status,
+            reason=response.reason,
+            client=self,
+            request=request,
+        )
+
+    async def _handle_request_failure(
+        self, error: Exception, base_log_info: dict
+    ) -> None:
+        logger.error(
+            {
+                "msg": "Request error",
+                **base_log_info,
+                "error": repr(error),
+            }
+        )
+
+        if not isinstance(error, SpacsRequestError):
+            raise error
+
+        if self.close_on_error is True or (
+            isinstance(self.close_on_error, list)
+            and error.status in self.close_on_error
+        ):
+            await self.close()
+
+        if self.error_handler is not None:
+            return await self.error_handler(error)
+        raise error
 
     @classmethod
     async def close_all(cls) -> None:

@@ -92,9 +92,9 @@ asyncio.new_event_loop().run_until_complete(example())
 import asyncio
 from spacs import SpacsClient, SpacsRequest, SpacsRequestError
 
-async def error_handler(error: SpacsRequestError, client: SpacsClient) -> None:
+async def error_handler(error: SpacsRequestError) -> None:
     print(f"It blew up: {error.reason}")
-    await client.close()
+    await error.client.close()
 
 async def example():
     client = SpacsClient(base_url="https://httpbin.org", error_handler=error_handler)

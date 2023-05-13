@@ -97,9 +97,9 @@ async def test_post_model(make_client: ClientFactory):
 
 @pytest.mark.asyncio
 async def test_error_handler(make_client: ClientFactory) -> None:
-    async def handler(error: SpacsRequestError, client: SpacsClient) -> None:
+    async def handler(error: SpacsRequestError) -> None:
         assert error.status == 500
-        assert isinstance(client, SpacsClient)
+        assert isinstance(error.client, SpacsClient)
 
     mock_handler = AsyncMock(side_effect=handler)
     client = make_client(ResponseConfig(status=500), mock_handler)
@@ -116,6 +116,48 @@ async def test_no_error_handler(make_client: ClientFactory) -> None:
     error = excinfo.value
     assert isinstance(error, SpacsRequestError)
     assert error.status == 500
+
+
+@pytest.mark.asyncio
+async def test_default_close_on_error(make_client: ClientFactory) -> None:
+    client = make_client(ResponseConfig(status=500))
+    assert client.is_open
+    with pytest.raises(SpacsRequestError):
+        await client.get(SpacsRequest(path="/"))
+    assert client.is_open
+
+
+@pytest.mark.asyncio
+async def test_close_on_all_errors(make_client: ClientFactory) -> None:
+    client = make_client(ResponseConfig(status=500), None, True)
+    assert client.is_open
+    with pytest.raises(SpacsRequestError):
+        await client.get(SpacsRequest(path="/"))
+    assert not client.is_open
+
+
+@pytest.mark.asyncio
+async def test_close_on_some_errors(make_client: ClientFactory) -> None:
+    def makeErrorClient(response_status: int) -> SpacsClient:
+        return make_client(ResponseConfig(status=response_status), None, [501, 502])
+
+    client = makeErrorClient(501)
+    assert client.is_open
+    with pytest.raises(SpacsRequestError):
+        await client.get(SpacsRequest(path="/"))
+    assert not client.is_open
+
+    client = makeErrorClient(502)
+    assert client.is_open
+    with pytest.raises(SpacsRequestError):
+        await client.get(SpacsRequest(path="/"))
+    assert not client.is_open
+
+    client = makeErrorClient(503)
+    assert client.is_open
+    with pytest.raises(SpacsRequestError):
+        await client.get(SpacsRequest(path="/"))
+    assert client.is_open
 
 
 @pytest.mark.asyncio

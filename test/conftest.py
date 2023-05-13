@@ -30,7 +30,12 @@ class ResponseConfig(BaseModel):
 
 ResponseFactory = Callable[[ResponseConfig], ClientResponse]
 ClientFactory = Callable[
-    [ResponseConfig, Callable[[SpacsRequestError], Awaitable[None]] | None], SpacsClient
+    [
+        ResponseConfig,
+        Callable[[SpacsRequestError], Awaitable[None]] | None,
+        bool | list[int] | None,
+    ],
+    SpacsClient,
 ]
 
 
@@ -61,8 +66,15 @@ def make_client(
         conf: ResponseConfig,
         error_handler: Callable[[SpacsRequestError, SpacsClient], Awaitable[None]]
         | None = None,
+        close_on_error: bool | list[int] | None = None,
     ) -> SpacsClient:
-        _client = SpacsClient(base_url=BASE_URL, error_handler=error_handler)
+        kwargs = {"base_url": BASE_URL}
+        if error_handler is not None:
+            kwargs["error_handler"] = error_handler
+        if close_on_error is not None:
+            kwargs["close_on_error"] = close_on_error
+
+        _client = SpacsClient(**kwargs)
         response = make_response(conf)
         _client.session._request = AsyncMock(return_value=response)
         return _client

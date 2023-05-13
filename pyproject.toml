@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "spacs"
-version = "0.0.8"
+version = "0.0.9"
 description = "Simple Pydantic AIOHTTP Client Sessions"
 authors = ["rlebel12"]
 readme = "README.md"
