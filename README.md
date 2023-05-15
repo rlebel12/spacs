@@ -1,5 +1,9 @@
 # SPACS: Simple Pydantic AIOHTTP Client Sessions
 
+[![pytest](https://github.com/rlebel12/spacs/actions/workflows/pytest.yml/badge.svg)](https://github.com/rlebel12/spacs/actions/workflows/pytest.yml)
+[![mypy](https://github.com/rlebel12/spacs/actions/workflows/mypy.yml/badge.svg)](https://github.com/rlebel12/spacs/actions/workflows/mypy.yml)
+[![CodeQL](https://github.com/rlebel12/spacs/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/rlebel12/spacs/actions/workflows/github-code-scanning/codeql)
+
 A package to assist in managing and using long-lived AIOHTTP client sessions with simplicity. Built to handle Pydantic objects.
 
 ## Features
