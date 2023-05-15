@@ -2,7 +2,7 @@ import datetime
 import json
 from collections.abc import Callable
 from enum import StrEnum
-from typing import Any, Awaitable, ClassVar, Self, Type
+from typing import Any, Awaitable, ClassVar, Type
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientResponse
@@ -13,7 +13,7 @@ from spacs.conf import logger
 ResponseModel = Type[BaseModel] | None
 ModelContent = BaseModel | list[BaseModel]
 JsonContent = dict[str, Any] | list[dict[str, Any]]
-RequestContent = JsonContent | ModelContent | None
+RequestContent = JsonContent | ModelContent | bytes | None
 SpacsResponse = str | JsonContent | ModelContent | None
 
 
@@ -27,7 +27,7 @@ class SpacsRequest(BaseModel):
     path: str
     params: RequestContent = None
     body: RequestContent = None
-    headers: dict[str, str] = None
+    headers: dict[str, str] | None = None
     content_type: ContentType = ContentType.JSON
     response_model: ResponseModel = None
 
@@ -56,7 +56,7 @@ class SpacsClient:
     error_handler: Callable[[SpacsRequestError], Awaitable[None]] | None
     close_on_error: bool | list[int]
 
-    _sessions: ClassVar[list[Self]] = []
+    _sessions: ClassVar[list["SpacsClient"]] = []
     _session: aiohttp.ClientSession | None = None
 
     def __init__(
@@ -84,17 +84,17 @@ class SpacsClient:
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        if not self.is_open:
+        if self._session is None or not self.is_open:
             self._session = aiohttp.ClientSession(base_url=self.base_url)
         return self._session
 
     @property
     def is_open(self) -> bool:
         """Returns `True` if a session exists and is open."""
-        return self._session and not self._session.closed
+        return bool(self._session and not self._session.closed)
 
     async def close(self) -> None:
-        if not self.is_open:
+        if self._session is None or not self.is_open:
             return logger.warning("No session to close")
         await self._session.close()
         self._session = None
@@ -131,7 +131,8 @@ class SpacsClient:
             logger.error("Failed to connect to server.")
             raise error
         except Exception as error:
-            return await self._handle_request_failure(error, base_log_info)
+            await self._handle_request_failure(error, base_log_info)
+            return None
 
     def _prepare_request(self, request: SpacsRequest) -> SpacsRequest:
         # Copy content to not modify inputs to `SpacsClient` actions
@@ -186,7 +187,7 @@ class SpacsClient:
             return await self._handle_ok_response(response, request.response_model)
         raise SpacsRequestError(
             status=response.status,
-            reason=response.reason,
+            reason=str(response.reason),
             client=self,
             request=request,
         )
@@ -227,16 +228,16 @@ class SpacsClient:
         cls, response: ClientResponse, model: Type[BaseModel] | None
     ) -> str | JsonContent | ModelContent:
         content = await cls._parse_response(response)
-        if model is not None and not isinstance(response, str):
-            content = cls._response_content_to_model(content, model)
+        if model is not None and not isinstance(content, str):
+            return cls._response_content_to_model(content, model)
         return content
 
     @classmethod
     def _prepare_content(cls, content: RequestContent) -> RequestContent:
         """Ensures input objects are in acceptable formats for requests"""
 
-        if content is None:
-            return
+        if content is None or isinstance(content, bytes):
+            return content
 
         if isinstance(content, list):
             return [cls._prepare_content(item) for item in content]
