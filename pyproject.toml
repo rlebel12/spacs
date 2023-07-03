@@ -10,7 +10,7 @@ packages = [{include = "spacs"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 aiohttp = "^3.8.4"
-pydantic = "^1.10.7"
+pydantic = ">=1.10.7,<3.0.0"
 
 
 [tool.poetry.group.test.dependencies]
